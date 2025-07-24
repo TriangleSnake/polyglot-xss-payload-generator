@@ -1,0 +1,1 @@
+# polyglot-xss-payload-generator
