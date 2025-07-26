@@ -1,0 +1,8 @@
+version: "3.8"
+
+services:
+  firing-range:
+    build: .
+    container_name: firing-range
+    ports:
+      - "8081:8080"
