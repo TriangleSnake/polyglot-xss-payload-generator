@@ -1,74 +1,65 @@
-# module.py
-
-import math
-import random
-import copy
 from tokens import TOKENS
+import testbed
+import asyncio
 
-class Node:
-    def __init__(self, tokens=None, parent=None):
-        self.tokens = tokens or []
+class Node():
+    def __init__(self, payload='', parent=None):
         self.parent = parent
+        self.payload = payload if parent is None else parent.payload + payload
         self.children = []
         self.visits = 0
-        self.total_reward = 0.0
+        self.score = 0
 
-    def is_terminal(self, max_len=10):
-        return len(self.tokens) >= max_len
+def expand(node: Node):
 
-    def expand(self):
-        tried = {tuple(child.tokens) for child in self.children}
-        untried = []
-        for tok in TOKENS:
-            new_seq = self.tokens + [tok]
-            if tuple(new_seq) not in tried:
-                untried.append(tok)
-        if not untried:
-            return None
-        action = random.choice(untried)
-        child = Node(self.tokens + [action], parent=self)
-        self.children.append(child)
-        return child
+    children = TOKENS
+    
+    for i in ["<script>","<svg","<img"]:
+        if i in node.payload:
+            children.remove(i)
+    node.children = [Node(payload=token, parent=node) for token in children]
+    print(f"Expanding: {node.payload} -> {len(node.children)} children")
 
-    def score(self, c=1.41):
-        if self.visits == 0:
+def select(node: Node) -> Node:
+    def uct_value(child: Node, parent_visits: int) -> float:
+        if child.visits == 0:
             return float('inf')
-        return (self.total_reward / self.visits) + c * math.sqrt(math.log(self.parent.visits) / self.visits)
+        return child.score / child.visits + (2 * (2 * (parent_visits ** 0.5) / child.visits) ** 0.5)
+    while node.children:
+        node = max(node.children, key=lambda n: uct_value(n, node.visits))
+        print(f"Selecting: {node.payload} -> visits={node.visits}, score={node.score}")
+    return node
 
-def select(node: Node) -> Node: 
-    current = node
-    while current.children:
-        current = max(current.children, key=lambda n: n.score())
-    return current
-
-def expand(node: Node) -> Node: 
-    if node.is_terminal():
-        return node
-    return node.expand() or node
-
-def simulate(node: Node, testbed_func, max_len=10) -> int:
-    tokens = copy.deepcopy(node.tokens)
-    while len(tokens) < max_len:
-        tokens.append(random.choice(TOKENS))
-        if random.random() < 0.2:
-            break
-    payload = ''.join(tokens)
-    return testbed_func(payload)
-
-def backpropagate(node: Node, reward):
+def simulate(node: Node) -> int:
+    node.visits += 1
+    reward = asyncio.run(testbed.testbed(node.payload))
+    print(f"Simulating: {node.payload} -> reward={reward}")
+    return reward
+def backpropagate(node: Node, reward: int):
     while node:
         node.visits += 1
-        node.total_reward += reward
+        node.score += reward
+        print(f"Backpropagating: {node} visits={node.visits}, score={node.score}")
         node = node.parent
+        
 
-def mcts(root: Node, testbed_func, iterations=1000, max_len=10):
-    for _ in range(iterations):
-        leaf = select(root)
-        child = expand(leaf)
-        reward = simulate(child, testbed_func, max_len)
-        backpropagate(child, reward)
-    # 回傳 reward 最高的第一層子節點
-    if not root.children:
-        return '', 0
-    best = max(root.children, key=lambda n: n.total_reward / (n.visits or 1))
-    return ''.join(best.tokens), best.total_reward / (best.visits or 1)
+def mcts(iterations: int = 100):
+    root = Node()
+    for _ in range(iterations):  # Example iterations
+        current_node = root
+        while current_node.children:
+            current_node = select(current_node)
+        if current_node.visits > 0:
+            expand(current_node)
+            current_node = current_node.children[0]
+        reward = simulate(current_node)
+        backpropagate(current_node, reward)
+        # Simulate a random game from the current node
+    best_child = max(root.children, key=lambda n: n.score / n.visits if n.visits > 0 else 0)
+    return best_child.payload, best_child.score / best_child.visits if best_child.visits > 0 else 0
+
+
+if __name__ == "__main__":
+    best_payload, avg_reward = mcts(iterations=3000)
+    print("最佳 XSS polyglot payload：", best_payload)
+    print("平均覆蓋 context 數：", avg_reward)
