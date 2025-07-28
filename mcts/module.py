@@ -1,19 +1,20 @@
 from tokens import TOKENS
 import testbed
 import asyncio
+import random
 
 class Node():
     def __init__(self, payload='', parent=None):
         self.parent = parent
-        self.payload = payload if parent is None else parent.payload + payload
+        self.payload = payload if parent is None else parent.payload + " " + payload
         self.children = []
         self.visits = 0
         self.score = 0
 
 def expand(node: Node):
 
-    children = TOKENS
-    
+    children = TOKENS.copy()
+
     for i in ["<script>","<svg","<img"]:
         if i in node.payload:
             children.remove(i)
@@ -32,8 +33,9 @@ def select(node: Node) -> Node:
 
 def simulate(node: Node) -> int:
     node.visits += 1
+    print(f"Simulating payload: {node.payload}",end=' ')
     reward = asyncio.run(testbed.testbed(node.payload))
-    print(f"Simulating: {node.payload} -> reward={reward}")
+    print(f"-> reward={reward}")
     return reward
 def backpropagate(node: Node, reward: int):
     while node:
@@ -46,6 +48,7 @@ def backpropagate(node: Node, reward: int):
 def mcts(iterations: int = 100):
     root = Node()
     for _ in range(iterations):  # Example iterations
+        print(f"Iteration {_+1}/{iterations}")
         current_node = root
         while current_node.children:
             current_node = select(current_node)
