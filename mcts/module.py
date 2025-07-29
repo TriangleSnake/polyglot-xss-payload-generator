@@ -2,39 +2,73 @@ from tokens import TOKENS
 import testbed
 import asyncio
 import random
+import math
 
 class Node():
-    def __init__(self, payload='', parent=None):
+    def __init__(self,payload: dict = {}, parent=None):
         self.parent = parent
-        self.payload = payload if parent is None else parent.payload + " " + payload
+        self.payload = payload
+        if self.payload == {}:
+            self.payload["type"] = "trigger_exploits"
+            self.payload["data"] = random.choice(TOKENS["sets"][self.payload["type"]])
+        else :
+            self.payload["data"] = parent.payload["data"] + self.payload["data"]
         self.children = []
         self.visits = 0
         self.score = 0
 
 def expand(node: Node):
 
-    children = TOKENS.copy()
+    next_type = TOKENS["trans"][node.payload["type"]]
+    if next_type == []:
+        next_type = list(TOKENS["sets"])
 
-    for i in ["<script>","<svg","<img"]:
-        if i in node.payload:
-            children.remove(i)
-    node.children = [Node(payload=token, parent=node) for token in children]
+    node.children = []
+    for i in next_type:
+        for j in TOKENS["sets"][i]:
+            node.children.append(Node(payload={"type": i, "data": j}, parent=node))
+
     print(f"Expanding: {node.payload} -> {len(node.children)} children")
 
 def select(node: Node) -> Node:
-    def uct_value(child: Node, parent_visits: int) -> float:
+    def uct_value(child: Node, parent_visits: int, c: float = 1.5) -> float:
         if child.visits == 0:
-            return float('inf')
-        return child.score / child.visits + (2 * (2 * (parent_visits ** 0.5) / child.visits) ** 0.5)
+            return float('inf')                 
+        exploit = child.score / child.visits
+        explore = c * math.sqrt(math.log(parent_visits) / child.visits)
+        return exploit + explore
     while node.children:
         node = max(node.children, key=lambda n: uct_value(n, node.visits))
-        print(f"Selecting: {node.payload} -> visits={node.visits}, score={node.score}")
+        print(f"Selecting: {node.payload} -> visits={node.visits}, uct_value={uct_value(node, node.parent.visits)}")
     return node
 
 def simulate(node: Node) -> int:
+    global best_payload
+    def _choose_random_token(payload: dict) -> str:
+        cpayload = payload.copy()
+        while len(cpayload["data"]) < 40:
+            type_lst = list(TOKENS["trans"][cpayload["type"]])
+            if type_lst == []:
+                type_lst = list(TOKENS["sets"])
+            cpayload["type"] = random.choice(type_lst)
+            cpayload["data"] += random.choice(TOKENS["sets"][cpayload["type"]])
+        return cpayload
+
     node.visits += 1
-    print(f"Simulating payload: {node.payload}",end=' ')
-    reward = asyncio.run(testbed.testbed(node.payload))
+    
+    #reward = asyncio.run(testbed.testbed(node.payload))
+    if random.random() < 0.5:
+        print("Cut!")
+        payload = node.payload
+    else:
+        print("Fill random token")
+        payload = _choose_random_token(node.payload)
+    print(f"Simulating payload: {payload}",end=' ')
+    reward = asyncio.run(testbed.local_testbed(payload["data"]))
+    if reward > best_payload["score"]:
+        best_payload["node"] = node
+        best_payload["score"] = reward
+        print(f"-> New best payload: {node.payload["data"]} with score={reward}")
     print(f"-> reward={reward}")
     return reward
 def backpropagate(node: Node, reward: int):
@@ -47,6 +81,8 @@ def backpropagate(node: Node, reward: int):
 
 def mcts(iterations: int = 100):
     root = Node()
+    global best_payload
+    best_payload = {"node": root, "score": 0}
     for _ in range(iterations):  # Example iterations
         print(f"Iteration {_+1}/{iterations}")
         current_node = root
@@ -58,11 +94,4 @@ def mcts(iterations: int = 100):
         reward = simulate(current_node)
         backpropagate(current_node, reward)
         # Simulate a random game from the current node
-    best_child = max(root.children, key=lambda n: n.score / n.visits if n.visits > 0 else 0)
-    return best_child.payload, best_child.score / best_child.visits if best_child.visits > 0 else 0
-
-
-if __name__ == "__main__":
-    best_payload, avg_reward = mcts(iterations=3000)
-    print("最佳 XSS polyglot payload：", best_payload)
-    print("平均覆蓋 context 數：", avg_reward)
+    return best_payload["node"].payload, best_payload["score"]

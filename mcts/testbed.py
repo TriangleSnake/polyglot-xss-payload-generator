@@ -1,8 +1,11 @@
 # testbed.py
 import asyncio
-from playwright.async_api import async_playwright,Dialog
+from playwright.async_api import async_playwright,Dialog,Page
 from urllib.parse import quote_plus
 from urls import TESTBED_URLS
+import os
+
+os.chdir(os.path.dirname(os.path.abspath(__file__)))
 
 async def evaluate(url: str, payload: str) -> bool:
     if "alert()" not in payload:
@@ -21,18 +24,8 @@ async def evaluate(url: str, payload: str) -> bool:
 
         page.on("dialog", on_dialog)
 
-        targets = [
-            f"{url}?#{payload}",
-            f"{url}?q={payload}&url={payload}",
-            f"{url}/{payload}"
-        ]
-
-        for target in targets:
-            try:
-                await page.goto(target, timeout=1000)
-            except Exception as e:
-                pass
-                #print(f"[x] Timeout / Error at {target}: {e}")
+        target = f"{url}?q={payload}"
+        await page.goto(target)
     if triggered:
         print(f"[v] Triggered XSS")
     return triggered
@@ -48,7 +41,29 @@ async def testbed(payload: str) -> int:
     
     return trigger_count
 
+async def local_testbed(payload: str) -> int:
+    async with async_playwright() as p:
+        reward = 0
+        async def on_dialog(dialog:Dialog):
+            nonlocal triggered
+            triggered = True
+            await dialog.dismiss()
+            
+        browser = await p.chromium.launch(headless=True)
+        page = await browser.new_page()
+        page.on("dialog", on_dialog)
+        for i in range(1, 15):
+            triggered = False
+            template_path = f"../testbed_server/localtest/template_{i}.html"
+            with open(template_path, "r", encoding="utf-8") as f:
+                template_content = f.read()
+            await page.set_content(template_content.format(payload=payload),wait_until="load")
+            if triggered:
+                reward += 1
+        await page.close()
+        return reward
+
 if __name__ == "__main__":
-    polyglot = 'alert()'
-    result = asyncio.run(testbed(polyglot))
+    polyglot = '<svg onload=alert()><svg onload=alert()><svg onload=alert()><svg onload=alert()><svg onload=alert()><svg onload=alert()>'
+    result = asyncio.run(local_testbed(polyglot))
     print("觸發 XSS context 數：", result)
