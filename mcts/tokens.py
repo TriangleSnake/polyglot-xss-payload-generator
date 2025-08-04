@@ -1,11 +1,11 @@
 TOKENS = {
     "sets": {
         "inline": [
-            "jAvAsCriPt:alert()",
+            "jAvAsCriPt:",
         ],
 
         "trigger_exploits": [
-            "alert() ",
+            "alert()",
         ],
 
         "literal_tokens": [
@@ -26,14 +26,12 @@ TOKENS = {
             "\"",
             "*",
             "*/",
-            "\x20",  # space
-            "\x27",  # single-quote
+            "\r",
+            "\n"
         ],
 
         "open": [          # 〈
-            "<",
-            "&lt;",
-            "\x3c",
+            "<"
         ],
 
         "pre_token": [
@@ -47,12 +45,10 @@ TOKENS = {
         ],
 
         "trigger_tokens": [
-            " oNLoAd=alert()",
-            " oNeRrOr=alert()",
-            " onClICk=alert()",
-            " oNFoCus=alert()",
-            " OnBlUr=alert()",
-            " oNtOgGle=alert()"
+            "oNLoAd=",
+            "oNeRrOr=",
+            "OnBlUr=",
+            "oNtOgGle="
         ],
 
         # will be directly closed
@@ -80,10 +76,8 @@ TOKENS = {
             "/",
         ],
 
-        "close": [         # 〉
-            "&gt;",
+        "close": [ 
             ">",
-            "\x3e",
         ],
     },
 

